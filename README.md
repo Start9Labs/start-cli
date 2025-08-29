@@ -24,11 +24,11 @@ Official StartOS source code is here: [start9labs/start-os](https://github.com/s
 
 The easiest way to install start-cli is using our automated installer script:
 ```
-curl -fsSL https://raw.githubusercontent.com/Start9Labs/start-cli/refs/heads/master/start-cli-installer.sh | sh
+curl -fsSL https://start9labs.github.io/start-cli | sh
 ```
 Or download and run the script manually:
 ```
-curl -fsSL https://raw.githubusercontent.com/Start9Labs/start-cli/refs/heads/master/start-cli-installer.sh -o start-cli-installer.sh
+curl -fsSL https://start9labs.github.io/start-cli -o start-cli-installer.sh
 chmod +x start-cli-installer.sh
 ./start-cli-installer.sh
 ```
