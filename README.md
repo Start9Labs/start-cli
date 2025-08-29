@@ -26,6 +26,12 @@ The easiest way to install start-cli is using our automated installer script:
 ```
 curl -fsSL https://start9labs.github.io/start-cli | sh
 ```
+<details>
+  <summary><b>Click to see installation demo</b><br><br></summary>
+  <img src=".github/start-cli-installer-demo.webp" width="600" alt="Start CLI Installer demo animation"/>
+  <br>
+</details>
+
 Or download and run the script manually:
 ```
 curl -fsSL https://start9labs.github.io/start-cli -o start-cli-installer.sh
