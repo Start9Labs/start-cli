@@ -28,7 +28,7 @@ curl -fsSL https://start9labs.github.io/start-cli | sh
 ```
 <details>
   <summary><b>Click to see installation demo</b><br><br></summary>
-  <img src=".github/start-cli-installer-demo.webp" width="600" alt="Start CLI Installer demo animation"/>
+  <img src=".github/start-cli-installer-demo.webp" alt="Start CLI Installer demo animation"/>
   <br>
 </details>
 
