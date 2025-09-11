@@ -32,6 +32,18 @@ printf "%s│%s                                                               %s
 printf "%s└───────────────────────────────────────────────────────────────┘%s\n" "$DIM$RED" "$RESET"
 printf "\n"
 
+# Helper functions
+err() {
+    printf "%sError:%s %s\n" "$RED$BOLD" "$RESET" "$1" >&2
+    exit 1
+}
+
+# Dependency checks
+for cmd in curl tar; do
+    command -v "$cmd" >/dev/null 2>&1 || err "Required command '$cmd' is not installed."
+done
+command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 || err "Required command 'sha256sum' or 'shasum' is not installed."
+
 # Detect platform
 OS=$(uname -s)
 ARCH=$(uname -m)
@@ -43,13 +55,11 @@ case "$OS" in
         DISPLAY_OS="macOS"
         ;;
     Linux) 
-        OS_NAME="unknown-linux-gnu"
+        OS_NAME="unknown-linux-musl"
         DISPLAY_OS="Linux"
         ;;
     *)
-        printf "%sError:%s Unsupported operating system: %s\n" "$RED$BOLD" "$RESET" "$OS"
-        printf "       start-cli supports macOS and Linux only\n"
-        exit 1
+        err "Unsupported operating system: $OS. start-cli supports macOS and Linux only."
         ;;
 esac
 
@@ -63,17 +73,26 @@ case "$ARCH" in
         DISPLAY_ARCH="ARM64"
         ;;
     *)
-        printf "%sError:%s Unsupported architecture: %s\n" "$RED$BOLD" "$RESET" "$ARCH"
-        printf "       start-cli supports x86_64 and ARM64 only\n"
-        exit 1
+        err "Unsupported architecture: $ARCH. start-cli supports x86_64 and ARM64 only."
         ;;
 esac
 
-# Version and download info
-VERSION="v0.4.0-alpha.9"
+# Fetch latest version from GitHub
+printf "%s•%s Fetching latest version info from GitHub...\n" "$YELLOW" "$RESET"
+LATEST_RELEASE_URL="https://api.github.com/repos/Start9Labs/start-cli/releases/latest"
+
+VERSION=$(curl -fsSL "$LATEST_RELEASE_URL" 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+
+if [ -z "$VERSION" ]; then
+    err "Could not determine latest version from GitHub API."
+fi
+printf "%s✓%s Found version: %s%s%s\n" "$GREEN" "$RESET" "$BOLD" "$VERSION" "$RESET"
+
+# Set download info based on fetched version
 FILENAME="start-cli-${ARCH_NAME}-${OS_NAME}.tar.gz"
 BINARY_NAME="start-cli-${ARCH_NAME}-${OS_NAME}"
 DOWNLOAD_URL="https://github.com/Start9Labs/start-cli/releases/download/${VERSION}/${FILENAME}"
+CHECKSUM_URL="https://github.com/Start9Labs/start-cli/releases/download/${VERSION}/sha256sums.txt"
 
 # System information (dynamically aligned)
 BOX_WIDTH=63  # Total width inside the borders
@@ -104,21 +123,36 @@ mkdir -p "$TEMP_DIR"
 
 # Download
 printf "%s•%s Downloading from GitHub releases...\n" "$YELLOW" "$RESET"
-if ! curl -fsSL "$DOWNLOAD_URL" -o "$TEMP_DIR/$FILENAME" 2>/dev/null; then
-    printf "%sError:%s Failed to download from GitHub\n" "$RED$BOLD" "$RESET"
-    printf "       %s\n" "$DOWNLOAD_URL"
-    exit 1
+if ! COLUMNS=65 curl --progress-bar -fL "$DOWNLOAD_URL" -o "$TEMP_DIR/$FILENAME"; then
+    err "Failed to download from GitHub: $DOWNLOAD_URL"
 fi
 printf "%s✓%s Download completed\n" "$GREEN" "$RESET"
 
+# Verify checksum
+printf "%s•%s Verifying checksum...\n" "$YELLOW" "$RESET"
+if ! curl -fsSL "$CHECKSUM_URL" -o "$TEMP_DIR/sha256sums.txt"; then
+    err "Failed to download checksums file: $CHECKSUM_URL"
+fi
+
+EXPECTED_CHECKSUM=$(grep "$FILENAME" "$TEMP_DIR/sha256sums.txt" | awk '{print $1}')
+
+if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL_CHECKSUM=$(sha256sum "$TEMP_DIR/$FILENAME" | awk '{print $1}')
+else # Fallback to shasum on macOS
+    ACTUAL_CHECKSUM=$(shasum -a 256 "$TEMP_DIR/$FILENAME" | awk '{print $1}')
+fi
+
+if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+    err "Checksum mismatch! The downloaded file may be corrupt or tampered with."
+fi
+printf "%s✓%s Checksum verified\n" "$GREEN" "$RESET"
+
 # Extract
 printf "%s•%s Extracting archive...\n" "$YELLOW" "$RESET"
-if ! tar -xzf "$TEMP_DIR/$FILENAME" -C "$TEMP_DIR" 2>/dev/null; then
-    printf "%sError:%s Failed to extract archive\n" "$RED$BOLD" "$RESET"
-    exit 1
+if ! tar -xzf "$TEMP_DIR/$FILENAME" -C "$TEMP_DIR"; then
+    err "Failed to extract archive."
 fi
 printf "%s✓%s Archive extracted\n" "$GREEN" "$RESET"
-sleep 1
 # Locate binary
 printf "%s•%s Locating binary...\n" "$YELLOW" "$RESET"
 BINARY_PATH="$TEMP_DIR/$BINARY_NAME"
@@ -129,8 +163,7 @@ elif [ -f "$TEMP_DIR/start-cli" ]; then
     printf "%s✓%s Binary located\n" "$GREEN" "$RESET"
     BINARY_PATH="$TEMP_DIR/start-cli"
 else
-    printf "%sError:%s Could not locate binary in archive\n" "$RED$BOLD" "$RESET"
-    exit 1
+    err "Could not locate binary in the extracted archive."
 fi
 
 # Test binary (rename first to fix the bug)
@@ -155,17 +188,21 @@ printf "%s✓%s Installation completed\n" "$GREEN" "$RESET"
 # Update shell configs
 printf "%s•%s Updating shell configurations...\n" "$YELLOW" "$RESET"
 PATH_UPDATE='export PATH="$HOME/.local/bin:$PATH"'
-UPDATED_COUNT=0
+UPDATED_FILES=""
 
 for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
-    if [ -f "$shell_rc" ] && ! grep -q "HOME/.local/bin" "$shell_rc" 2>/dev/null; then
+    if [ -f "$shell_rc" ] && ! grep -qF -- "$PATH_UPDATE" "$shell_rc" 2>/dev/null; then
         echo "$PATH_UPDATE" >> "$shell_rc"
-        UPDATED_COUNT=$((UPDATED_COUNT + 1))
+        if [ -z "$UPDATED_FILES" ]; then
+            UPDATED_FILES="$(basename "$shell_rc")"
+        else
+            UPDATED_FILES="$UPDATED_FILES, $(basename "$shell_rc")"
+        fi
     fi
 done
 
-if [ $UPDATED_COUNT -gt 0 ]; then
-    printf "%s✓%s Shell configurations updated\n" "$GREEN" "$RESET"
+if [ -n "$UPDATED_FILES" ]; then
+    printf "%s✓%s Added PATH to: %s%s%s\n" "$GREEN" "$RESET" "$GREEN" "$UPDATED_FILES" "$RESET"
 else
     printf "%s✓%s No shell config updates needed\n" "$GREEN" "$RESET"
 fi
