@@ -90,9 +90,9 @@ VERSION_SPACES=$((BOX_WIDTH - ${#VERSION_LABEL} - ${#VERSION_TEXT}))
 printf "%s│%s%s%s%s%*s%s│%s\n" "$DIM" "$RESET" "$VERSION_LABEL" "$GREEN" "$VERSION_TEXT" "$VERSION_SPACES" "" "$RESET$DIM" "$RESET"
 printf "%s└───────────────────────────────────────────────────────────────┘%s\n" "$DIM" "$RESET"
 
-# Create directories and temp
-printf "%s•%s Creating directories...\n" "$YELLOW" "$RESET"
-mkdir -p "$HOME/.local/bin"
+# Prepare installation directory and tempdir
+INSTALL_DIR="$HOME/.local/bin"
+mkdir -p "$INSTALL_DIR"
 TEMP_DIR="/tmp/start-cli-install-$$"
 trap "rm -rf '$TEMP_DIR'" EXIT
 mkdir -p "$TEMP_DIR"
@@ -116,8 +116,8 @@ printf "%s✓%s Checksum verified\n" "$GREEN" "$RESET"
 printf "%s•%s Extracting archive...\n" "$YELLOW" "$RESET"
 tar -xzf "$TEMP_DIR/$FILENAME" -C "$TEMP_DIR" || err "Failed to extract archive."
 printf "%s✓%s Archive extracted\n" "$GREEN" "$RESET"
-# Locate binary
-printf "%s•%s Locating binary...\n" "$YELLOW" "$RESET"
+
+# Locate binary and test
 BINARY_PATH="$TEMP_DIR/$BINARY_NAME"
 [ -f "$BINARY_PATH" ] || BINARY_PATH="$TEMP_DIR/start-cli"
 [ -f "$BINARY_PATH" ] || err "Could not locate binary in the extracted archive."
@@ -129,16 +129,34 @@ chmod +x "$TEST_BINARY"
 
 printf "%s•%s Testing binary...\n" "$YELLOW" "$RESET"
 if "$TEST_BINARY" --version >/dev/null 2>&1; then
-    VERSION_OUTPUT=$("$TEST_BINARY" --version 2>/dev/null | head -n1)
     printf "%s✓%s Binary test passed\n" "$GREEN" "$RESET"
 else
     printf "%sWarning:%s Binary test failed, continuing...\n" "$YELLOW$BOLD" "$RESET"
 fi
 
-# Install
-printf "%s•%s Installing to ~/.local/bin...\n" "$YELLOW" "$RESET"
-cp "$TEST_BINARY" "$HOME/.local/bin/start-cli"
-chmod +x "$HOME/.local/bin/start-cli"
+# Install/version-aware logic
+# Use: start-cli-X.Y.Z (short version) and always update the main symlink
+VERSION_SHORT=$(echo "${VERSION#v}" | cut -d- -f1)
+CLI_VERSIONED="start-cli-${VERSION_SHORT}"
+CLI_FINAL_VERSIONED="$INSTALL_DIR/$CLI_VERSIONED"
+CLI_SYMLINK="$INSTALL_DIR/start-cli"
+
+printf "%s•%s Installing as %s ...\n" "$YELLOW" "$RESET" "$CLI_VERSIONED"
+cp "$TEST_BINARY" "$CLI_FINAL_VERSIONED"
+chmod +x "$CLI_FINAL_VERSIONED"
+
+if [ -L "$CLI_SYMLINK" ]; then
+    ln -sf "$CLI_VERSIONED" "$CLI_SYMLINK"
+    printf "%s✓%s Updated symlink: start-cli -> %s\n" "$GREEN" "$RESET" "$CLI_VERSIONED"
+elif [ -e "$CLI_SYMLINK" ]; then
+    printf "%s!%s Found regular file as start-cli, moving to start-cli.bak\n" "$YELLOW" "$RESET"
+    mv "$CLI_SYMLINK" "$CLI_SYMLINK.bak"
+    ln -sf "$CLI_VERSIONED" "$CLI_SYMLINK"
+    printf "%s✓%s Created symlink: start-cli -> %s\n" "$GREEN" "$RESET" "$CLI_VERSIONED"
+else
+    ln -sf "$CLI_VERSIONED" "$CLI_SYMLINK"
+    printf "%s✓%s Created symlink: start-cli -> %s\n" "$GREEN" "$RESET" "$CLI_VERSIONED"
+fi
 printf "%s✓%s Installation completed\n" "$GREEN" "$RESET"
 
 # Update shell configuration for PATH
@@ -172,16 +190,12 @@ else
   printf "%s✓%s Added PATH block to %s%s%s\n" "$GREEN" "$RESET" "$BOLD" "$(basename "$PROFILE_FILE")" "$RESET"
   PATH_UPDATE_NEEDED=true
 fi
-
-# Update session if needed
-case ":$PATH:" in
-  *:"$HOME/.local/bin:"*) : ;;
-  *) export PATH="$HOME/.local/bin:$PATH" ;;
-esac
+# Add .local/bin to PATH for this session if needed
+case ":$PATH:" in *:"$HOME/.local/bin:"*) : ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
 
 # Success message and commands
 INSTALLED_VERSION="unknown"
-[ -x "$HOME/.local/bin/start-cli" ] && INSTALLED_VERSION=$("$HOME/.local/bin/start-cli" --version 2>/dev/null | head -n1 || echo "unknown")
+[ -x "$CLI_SYMLINK" ] && INSTALLED_VERSION=$("$CLI_SYMLINK" --version 2>/dev/null | head -n1 || echo "unknown")
 
 printf "\n"
 printf "%s┌───────────────────────────────────────────────────────────────┐%s\n" "$DIM$GREEN" "$RESET"
@@ -201,7 +215,7 @@ printf "  %sstart-cli --help%s            Show all commands\n" "$GREEN" "$RESET"
 printf "\n"
 printf "%sDocumentation:%s https://staging.docs.start9.com\n" "$BLUE" "$RESET"
 
-# Final reload info
+# Print reload advice last if needed
 if [ "$PATH_UPDATE_NEEDED" = true ]; then
   SRC_FILE="$(basename "$PROFILE_FILE")"
   printf "\n%sTo use start-cli immediately, run:%s\n" "$BLUE$BOLD" "$RESET"
