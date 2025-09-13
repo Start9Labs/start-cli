@@ -6,10 +6,11 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      tag_name:
-        description: 'Release version (e.g., v0.4.0-alpha.9)'
-        required: false
+      start_os_branch:
+        description: 'What Start9Labs/start-os branch to build from'
+        required: true
         type: string
+        default: 'next/major'
 
 permissions:
   contents: write
@@ -18,7 +19,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   UPSTREAM_REPO: Start9Labs/start-os
-  UPSTREAM_REF: next/major
+  UPSTREAM_REF: ${{ github.event.inputs.start_os_branch || 'next/major' }}
 
 jobs:
   prepare:
@@ -35,11 +36,16 @@ jobs:
           TAG=""
           SHOULD_RELEASE=false
 
-          # Priority: workflow input > git tag > nothing
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.tag_name }}" ]]; then
-            TAG="${{ inputs.tag_name }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "📦 Manual release triggered for branch: ${{ env.UPSTREAM_REF }}"
+            CARGO_URL="https://raw.githubusercontent.com/${{ env.UPSTREAM_REPO }}/${{ env.UPSTREAM_REF }}/core/startos/Cargo.toml"
+            echo "Fetching Cargo.toml from $CARGO_URL"
+            TAG=$(curl -sL "$CARGO_URL" | grep -m 1 'version = ' | sed 's/version = "\(.*\)".*/\1/')
+            if [[ ! $TAG == v* ]]; then
+              TAG="v$TAG"
+            fi
             SHOULD_RELEASE=true
-            echo "📦 Manual release triggered for: $TAG"
+            echo "Version from Cargo.toml: $TAG"
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             TAG="${{ github.ref_name }}"
             SHOULD_RELEASE=true
