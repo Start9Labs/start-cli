@@ -241,7 +241,7 @@ elif command -v startbox >/dev/null 2>&1; then
             printf "  %sIntegrate version switching? [y/N]:%s " "$BOLD" "$RESET"
             
             # Read user input
-            read -r SWITCH_RESPONSE
+            read -r SWITCH_RESPONSE < /dev/tty
             
             case "$SWITCH_RESPONSE" in
                 [yY]|[yY][tT][eE][sS])
