@@ -149,8 +149,8 @@ if [ -L "$CLI_SYMLINK" ]; then
     ln -sf "$CLI_VERSIONED" "$CLI_SYMLINK"
     printf "%s✓%s Updated symlink: start-cli -> %s\n" "$GREEN" "$RESET" "$CLI_VERSIONED"
 elif [ -e "$CLI_SYMLINK" ]; then
-    printf "%s!%s Found regular file as start-cli, moving to start-cli.bak\n" "$YELLOW" "$RESET"
-    mv "$CLI_SYMLINK" "$CLI_SYMLINK.bak"
+    printf "%s!%s Found regular file as start-cli, moving to .start-cli.bak\n" "$YELLOW" "$RESET"
+    mv "$CLI_SYMLINK" ".$CLI_SYMLINK.bak"
     ln -sf "$CLI_VERSIONED" "$CLI_SYMLINK"
     printf "%s✓%s Created symlink: start-cli -> %s\n" "$GREEN" "$RESET" "$CLI_VERSIONED"
 else
@@ -192,6 +192,101 @@ else
 fi
 # Add .local/bin to PATH for this session if needed
 case ":$PATH:" in *:"$HOME/.local/bin:"*) : ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
+
+# Check for startbox and offer version switching functionality
+printf "\n%s•%s Checking for version switching setup...\n" "$YELLOW" "$RESET"
+
+# Check if startbox already exists in ~/.local/bin
+if [ -f "$INSTALL_DIR/startbox" ]; then
+    printf "%s✓%s startbox already in ~/.local/bin - proceeding with installation\n" "$DIM" "$RESET"
+elif command -v startbox >/dev/null 2>&1; then
+    # startbox exists in system but not in ~/.local/bin
+    printf "%s✓%s startbox found in system\n" "$GREEN" "$RESET"
+    
+    # Check if switch-start-cli alias already exists
+    ALIAS_EXISTS=false
+    if command -v switch-start-cli >/dev/null 2>&1 || alias switch-start-cli 2>/dev/null; then
+        ALIAS_EXISTS=true
+    fi
+    
+    # Also check in shell config files
+    for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.bash_profile" "$HOME/.profile"; do
+        if [ -f "$shell_rc" ] && grep -q "switch-start-cli" "$shell_rc" 2>/dev/null; then
+            ALIAS_EXISTS=true
+            break
+        fi
+    done
+    
+    if [ "$ALIAS_EXISTS" = true ]; then
+        printf "%s✓%s switch-start-cli alias already configured - proceeding normally\n" "$DIM" "$RESET"
+    else
+        # Neither startbox in ~/.local/bin nor switch-start-cli alias exists
+        # Offer to set up version switching
+        
+        # Copy startbox to ~/.local/bin
+        printf "%s•%s Preparing version switching capability...\n" "$YELLOW" "$RESET"
+        if cp "$(command -v startbox)" "$INSTALL_DIR/startbox" 2>/dev/null; then
+            chmod +x "$INSTALL_DIR/startbox"
+            printf "%s✓%s startbox copied to ~/.local/bin\n" "$GREEN" "$RESET"
+            
+            # Offer to integrate switch-start-cli alias
+            printf "\n"
+            printf "%s┌─ Version Switching Setup ─────────────────────────────────────┐%s\n" "$DIM$BLUE" "$RESET"
+            printf "%s│%s                                                               %s│%s\n" "$DIM$BLUE" "$RESET" "$DIM$BLUE" "$RESET"
+            printf "%s│%s  Would you like to set up the %sswitch-start-cli%s alias?         %s│%s\n" "$DIM$BLUE" "$RESET" "$WHITE$BOLD" "$RESET" "$DIM$BLUE" "$RESET"
+            printf "%s│%s  This allows easy switching between start-cli and startbox.   %s│%s\n" "$DIM$BLUE" "$RESET" "$DIM$BLUE" "$RESET"
+            printf "%s│%s                                                               %s│%s\n" "$DIM$BLUE" "$RESET" "$DIM$BLUE" "$RESET"
+            printf "%s└───────────────────────────────────────────────────────────────┘%s\n" "$DIM$BLUE" "$RESET"
+            printf "\n"
+            printf "  %sIntegrate version switching? [y/N]:%s " "$BOLD" "$RESET"
+            
+            # Read user input
+            read -r SWITCH_RESPONSE
+            
+            case "$SWITCH_RESPONSE" in
+                [yY]|[yY][tT][eE][sS])
+                    printf "\n%s•%s Setting up version switching alias...\n" "$YELLOW" "$RESET"
+                    
+                    # The alias to add - now using startbox
+                    SWITCH_ALIAS='alias switch-start-cli='"'"'(cd ~/.local/bin || exit; if [ -L start-cli ] && [ "$(readlink start-cli)" = "startbox" ]; then target=$(ls start-cli-* 2>/dev/null | head -1); [ -z "$target" ] && { echo "No versioned start-cli found"; exit 1; }; ln -sf "$target" start-cli; echo "✅ Switched to start-cli ($(./start-cli --version 2>/dev/null | awk "{print \$NF}"))"; else ln -sf startbox start-cli; echo "✅ Switched to start-cli ($(./start-cli --version 2>/dev/null | awk "{print \$NF}"))"; fi)'"'"
+                    
+                    ALIAS_UPDATED_COUNT=0
+                    
+                    # Update shell configs with the alias
+                    for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.bash_profile" "$HOME/.profile"; do
+                        if [ -f "$shell_rc" ]; then
+                            # Double-check if alias already exists in file
+                            if ! grep -q "switch-start-cli" "$shell_rc" 2>/dev/null; then
+                                echo "" >> "$shell_rc"
+                                echo "# start-cli version switching" >> "$shell_rc"
+                                echo "$SWITCH_ALIAS" >> "$shell_rc"
+                                ALIAS_UPDATED_COUNT=$((ALIAS_UPDATED_COUNT + 1))
+                            fi
+                        fi
+                    done
+                    
+                    if [ $ALIAS_UPDATED_COUNT -gt 0 ]; then
+                        printf "%s✓%s Version switching alias added to shell configs\n" "$GREEN" "$RESET"
+                        printf "%s✓%s Current state: start-cli -> %s\n" "$GREEN" "$RESET" "$CLI_VERSIONED"
+                        printf "\n"
+                        printf "%sUsage:%s Run %sswitch-start-cli%s to toggle between versions\n" "$BOLD" "$RESET" "$GREEN" "$RESET"
+                        printf "       Available after restarting your shell or running:\n"
+                        printf "       %ssource ~/$(basename "$PROFILE_FILE")%s\n" "$DIM" "$RESET"
+                    else
+                        printf "%s✓%s Alias already configured in shell files\n" "$GREEN" "$RESET"
+                    fi
+                    ;;
+                *)
+                    printf "%s•%s Skipping version switching setup\n" "$DIM" "$RESET"
+                    ;;
+            esac
+        else
+            printf "%sWarning:%s Could not copy startbox - proceeding without version switching\n" "$YELLOW$BOLD" "$RESET"
+        fi
+    fi
+else
+    printf "%s•%s startbox not found - proceeding with standard installation\n" "$DIM" "$RESET"
+fi
 
 # Success message and commands
 INSTALLED_VERSION="unknown"
