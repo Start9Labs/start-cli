@@ -109,7 +109,7 @@ jobs:
           echo "GIT_HASH: $(cat GIT_HASH.txt)"
 
       - name: 🦀 Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@beta
         with:
           targets: ${{ matrix.rust_target }}
 
@@ -119,6 +119,16 @@ jobs:
           workspaces: start-os/core
           shared-key: ${{ matrix.rust_target }}
           cache-on-failure: true
+
+      # Install musl C toolchain for Linux musl builds only
+      - name: Install musl toolchain (Linux musl targets)
+        if: startsWith(matrix.os, 'ubuntu') && endsWith(matrix.rust_target, 'musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu
+          if ! command -v aarch64-linux-musl-gcc >/dev/null; then
+            sudo ln -s /usr/bin/aarch64-linux-gnu-gcc /usr/local/bin/aarch64-linux-musl-gcc
+          fi
 
       # macOS builds use standard cargo via Makefile
       - name: 🍎 Build start-cli (macOS)
