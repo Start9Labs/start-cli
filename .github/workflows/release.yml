@@ -86,7 +86,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout start-os repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ env.UPSTREAM_REPO }}
           ref: ${{ env.UPSTREAM_REF }}
@@ -133,15 +133,15 @@ jobs:
       # Linux builds use zigbuild for proper musl linking
       - name: 🔧 Install Zig toolchain (Linux musl)
         if: matrix.build_method == 'zigbuild'
-        uses: goto-bus-stop/setup-zig@v2
+        uses: mlugg/setup-zig@v2
         with:
           version: 0.12.0
 
-      - name: 🔧 Install cargo-zigbuild (Linux musl)
+      - name: 🔧 Install cargo-zigbuild and cross (Linux musl)
         if: matrix.build_method == 'zigbuild'
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-zigbuild
+          tool: cargo-zigbuild,cross
 
       - name: 🩹 Fix build-cli.sh syntax error
         if: matrix.build_method == 'zigbuild'
