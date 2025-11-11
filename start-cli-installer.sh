@@ -303,7 +303,7 @@ printf "\n"
 
 printf "%sCommon Commands:%s\n" "$BOLD" "$RESET"
 printf "%s────────────────────────────────────────────────────────────────%s\n" "$DIM" "$RESET"
-printf "  %sstart-cli init%s              Initialize developer key\n" "$GREEN" "$RESET"
+printf "  %sstart-cli init-key%s          Initialize developer key\n" "$GREEN" "$RESET"
 printf "  %sstart-cli auth login%s        Authenticate login to your StartOS\n" "$GREEN" "$RESET"
 printf "  %sstart-cli package list%s      List services\n" "$GREEN" "$RESET"
 printf "  %sstart-cli --help%s            Show all commands\n" "$GREEN" "$RESET"
