@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       start_os_branch:
-        description: 'What Start9Labs/start-os branch to build from'
+        description: "What Start9Labs/start-os branch to build from"
         required: true
         type: string
-        default: 'next/major'
+        default: "next/major"
 
 permissions:
   contents: write
@@ -69,15 +69,18 @@ jobs:
             os: macos-15-intel
             rust_target: x86_64-apple-darwin
             build_method: make
+
           - target: aarch64-apple-darwin
             os: macos-14
             rust_target: aarch64-apple-darwin
             build_method: make
+
           - target: x86_64-unknown-linux-musl
             os: ubuntu-22.04
             arch_env: x86_64
             rust_target: x86_64-unknown-linux-musl
             build_method: zigbuild
+
           - target: aarch64-unknown-linux-musl
             os: ubuntu-22.04-arm
             arch_env: aarch64
@@ -85,6 +88,21 @@ jobs:
             build_method: zigbuild
 
     steps:
+      # Extra disk space for Linux builds (fixes "No space left on device")
+      - name: 🧹 Free disk space (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          # Remove large, unused components
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          sudo docker image prune --all --force || true
+          sudo docker builder prune -a --force || true
+          echo "Disk space after cleanup:"
+          df -h  # verify space
+        # This is the common pattern for reclaiming 10–20GB on ubuntu runners. [web:12][web:16]
+
       - name: 📥 Checkout start-os repository
         uses: actions/checkout@v5
         with:
@@ -197,14 +215,14 @@ jobs:
             echo "🔍 Verifying musl binary is statically linked..."
             LDD_OUTPUT=$(ldd "$BIN" 2>&1 || true)
             echo "ldd output: $LDD_OUTPUT"
-            
+
             if [[ "$LDD_OUTPUT" == *"not a dynamic executable"* ]] || [[ "$LDD_OUTPUT" == *"statically linked"* ]]; then
               echo "✅ Binary is statically linked (musl)"
             else
               echo "⚠️ WARNING: Binary appears to be dynamically linked!"
               echo "$LDD_OUTPUT"
             fi
-            
+
             # Alternative check using file command
             echo "File command output:"
             file "$BIN"
@@ -214,7 +232,7 @@ jobs:
           OUT="artifacts/start-cli-${{ matrix.target }}"
           cp "$BIN" "$OUT"
           chmod +x "$OUT"
-          
+
           echo "📏 Binary size before stripping: $(du -h "$OUT" | cut -f1)"
           (strip "$OUT" || llvm-strip "$OUT" || true) 2>/dev/null || true
           echo "📏 Binary size after stripping: $(du -h "$OUT" | cut -f1)"
@@ -222,14 +240,13 @@ jobs:
           # Create archive
           pushd artifacts >/dev/null
           tar -czf "start-cli-${{ matrix.target }}.tar.gz" "start-cli-${{ matrix.target }}"
-          
+
           # Generate checksum
           if command -v sha256sum >/dev/null 2>&1; then
             sha256sum "start-cli-${{ matrix.target }}.tar.gz" > "start-cli-${{ matrix.target }}.tar.gz.sha256"
           else
             shasum -a 256 "start-cli-${{ matrix.target }}.tar.gz" > "start-cli-${{ matrix.target }}.tar.gz.sha256"
           fi
-          
           echo "📦 Archive created: start-cli-${{ matrix.target }}.tar.gz"
           popd >/dev/null
 
@@ -256,12 +273,10 @@ jobs:
         working-directory: release-binaries
         run: |
           echo "📦 Downloaded binaries:"
-          ls -lh *.tar.gz
+          ls -lh *.tar.gz || true
           echo ""
-          
           # Combine all checksums
           cat *.sha256 > sha256sums.txt
-          
           echo "✅ SHA256 checksums:"
           cat sha256sums.txt
 
@@ -276,7 +291,7 @@ jobs:
             echo "### 📦 Installation"
             echo ""
             echo "Download the appropriate binary for your platform and extract:"
-            echo '```sh'
+            echo '```
             echo 'tar -xzf start-cli-<platform>.tar.gz'
             echo 'chmod +x start-cli-<platform>'
             echo 'sudo mv start-cli-<platform> /usr/local/bin/start-cli'
@@ -285,12 +300,12 @@ jobs:
             echo "### 🔍 Verify Download"
             echo ""
             echo "Compare the checksum with the values below:"
-            echo '```sh'
+            echo '```
             echo 'shasum -a 256 start-cli-<platform>.tar.gz'
             echo '```'
             echo ""
             echo "### ✅ SHA256 Checksums"
-            echo '```'
+            echo '```
             cat sha256sums.txt
             echo '```'
             echo ""
