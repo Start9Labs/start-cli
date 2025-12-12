@@ -87,6 +87,13 @@ jobs:
             rust_target: aarch64-unknown-linux-musl
             build_method: zigbuild
 
+          # New RISC-V Linux musl target on ARM runner
+          - target: riscv64gc-unknown-linux-musl
+            os: ubuntu-22.04-arm
+            arch_env: riscv64
+            rust_target: riscv64gc-unknown-linux-musl
+            build_method: zigbuild
+
     steps:
       - name: 🧹 Free disk space (Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
@@ -139,10 +146,11 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu') && endsWith(matrix.rust_target, 'musl')
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu
+          sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu
           if ! command -v aarch64-linux-musl-gcc >/dev/null; then
             sudo ln -s /usr/bin/aarch64-linux-gnu-gcc /usr/local/bin/aarch64-linux-musl-gcc
           fi
+          # RISC-V: clang/zig will handle most of it, gcc-riscv64-linux-gnu provides sysroot/libs. [web:70][web:73]
 
       - name: 🍎 Build start-cli (macOS)
         if: matrix.build_method == 'make'
