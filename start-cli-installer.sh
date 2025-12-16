@@ -150,7 +150,7 @@ if [ -L "$CLI_SYMLINK" ]; then
     printf "%s✓%s Updated symlink: start-cli -> %s\n" "$GREEN" "$RESET" "$CLI_VERSIONED"
 elif [ -e "$CLI_SYMLINK" ]; then
     printf "%s!%s Found regular file as start-cli, moving to .start-cli.bak\n" "$YELLOW" "$RESET"
-    mv "$CLI_SYMLINK" ".$CLI_SYMLINK.bak"
+    mv "$CLI_SYMLINK" "$INSTALL_DIR/.start-cli.bak"
     ln -sf "$CLI_VERSIONED" "$CLI_SYMLINK"
     printf "%s✓%s Created symlink: start-cli -> %s\n" "$GREEN" "$RESET" "$CLI_VERSIONED"
 else
