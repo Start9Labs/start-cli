@@ -147,7 +147,7 @@ jobs:
           ENFORCE_USE_DOCKER: "0"
         run: |
           echo "Building using cargo-zigbuild for static musl binary..."
-          ./core/build/build-cli
+          ./core/build/build-cli.sh
 
       - name: 📦 Package and verify binary
         shell: bash
