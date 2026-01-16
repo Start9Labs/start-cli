@@ -43,7 +43,7 @@ case "$OS" in
         DISPLAY_OS="macOS"
         ;;
     Linux) 
-        OS_NAME="unknown-linux-gnu"
+        OS_NAME="unknown-linux-musl"
         DISPLAY_OS="Linux"
         ;;
     *)
@@ -69,8 +69,18 @@ case "$ARCH" in
         ;;
 esac
 
-# Version and download info
-VERSION="v0.4.0-alpha.9"
+# Fetch latest version from GitHub (including pre-releases)
+printf "%s•%s Fetching latest release...\n" "$YELLOW" "$RESET"
+VERSION=$(curl -fsSL https://api.github.com/repos/Start9Labs/start-cli/releases | grep -m1 '"tag_name":' | sed 's/.*: "//;s/",//')
+
+if [ -z "$VERSION" ]; then
+    printf "%sError:%s Could not determine latest version\n" "$RED$BOLD" "$RESET"
+    exit 1
+fi
+
+printf "%s✓%s Latest version: %s\n" "$GREEN" "$RESET" "$VERSION"
+
+# Download info
 FILENAME="start-cli-${ARCH_NAME}-${OS_NAME}.tar.gz"
 BINARY_NAME="start-cli-${ARCH_NAME}-${OS_NAME}"
 DOWNLOAD_URL="https://github.com/Start9Labs/start-cli/releases/download/${VERSION}/${FILENAME}"

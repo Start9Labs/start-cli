@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release version (e.g., v0.4.0-alpha.9)'
+        description: "Release version (e.g., v0.4.0)"
         required: false
         type: string
 
@@ -137,15 +137,6 @@ jobs:
         with:
           tool: cargo-zigbuild
 
-      - name: 🩹 Fix build-cli.sh syntax error
-        if: matrix.build_method == 'zigbuild'
-        working-directory: start-os
-        run: |
-          # Fix known typo: 'do' should be 'then'
-          sed -i 's/]; do/]; then/' core/build-cli.sh
-          # Verify script syntax
-          bash -n core/build-cli.sh
-
       - name: 🐧 Build start-cli (Linux musl)
         if: matrix.build_method == 'zigbuild'
         working-directory: start-os
@@ -156,7 +147,7 @@ jobs:
           ENFORCE_USE_DOCKER: "0"
         run: |
           echo "Building using cargo-zigbuild for static musl binary..."
-          ./core/build-cli.sh
+          ./core/build/build-cli
 
       - name: 📦 Package and verify binary
         shell: bash
@@ -198,7 +189,7 @@ jobs:
           OUT="artifacts/start-cli-${{ matrix.target }}"
           cp "$BIN" "$OUT"
           chmod +x "$OUT"
-          
+
           echo "📏 Binary size before stripping: $(du -h "$OUT" | cut -f1)"
           (strip "$OUT" || llvm-strip "$OUT" || true) 2>/dev/null || true
           echo "📏 Binary size after stripping: $(du -h "$OUT" | cut -f1)"
@@ -206,14 +197,14 @@ jobs:
           # Create archive
           pushd artifacts >/dev/null
           tar -czf "start-cli-${{ matrix.target }}.tar.gz" "start-cli-${{ matrix.target }}"
-          
+
           # Generate checksum
           if command -v sha256sum >/dev/null 2>&1; then
             sha256sum "start-cli-${{ matrix.target }}.tar.gz" > "start-cli-${{ matrix.target }}.tar.gz.sha256"
           else
             shasum -a 256 "start-cli-${{ matrix.target }}.tar.gz" > "start-cli-${{ matrix.target }}.tar.gz.sha256"
           fi
-          
+
           echo "📦 Archive created: start-cli-${{ matrix.target }}.tar.gz"
           popd >/dev/null
 
@@ -242,10 +233,10 @@ jobs:
           echo "📦 Downloaded binaries:"
           ls -lh *.tar.gz
           echo ""
-          
+
           # Combine all checksums
           cat *.sha256 > sha256sums.txt
-          
+
           echo "✅ SHA256 checksums:"
           cat sha256sums.txt
 
