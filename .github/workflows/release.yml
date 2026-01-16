@@ -292,4 +292,4 @@ jobs:
           prerelease: ${{ contains(needs.prepare.outputs.tag_name, 'alpha') || contains(needs.prepare.outputs.tag_name, 'beta') }}
           generate_release_notes: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}w
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
