@@ -6,10 +6,11 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      tag_name:
-        description: "Release version (e.g., v0.4.0)"
-        required: false
+      start_os_branch:
+        description: "What Start9Labs/start-os branch to build from"
+        required: true
         type: string
+        default: "next/major"
 
 permissions:
   contents: write
@@ -18,7 +19,8 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   UPSTREAM_REPO: Start9Labs/start-os
-  UPSTREAM_REF: next/major
+  UPSTREAM_REF: ${{ github.event.inputs.start_os_branch || 'next/major' }}
+  NODEJS_VERSION: "24.11.0"
 
 jobs:
   prepare:
@@ -35,11 +37,28 @@ jobs:
           TAG=""
           SHOULD_RELEASE=false
 
-          # Priority: workflow input > git tag > nothing
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.tag_name }}" ]]; then
-            TAG="${{ inputs.tag_name }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "📦 Manual release triggered for branch: ${{ env.UPSTREAM_REF }}"
+            CARGO_URL="https://raw.githubusercontent.com/${{ env.UPSTREAM_REPO }}/${{ env.UPSTREAM_REF }}/core/startos/Cargo.toml"
+            echo "Fetching Cargo.toml from $CARGO_URL"
+            for i in {1..3}; do
+              echo "Attempt $i of 3..."
+              if TAG=$(curl -fsL "$CARGO_URL" | grep -m 1 'version = ' | sed 's/version = "\(.*\)".*/\1/'); then
+                break
+              fi
+              if [[ $i -lt 3 ]]; then
+                echo "Failed, waiting 5 seconds before retry..."
+                sleep 5
+              else
+                echo "❌ Failed to fetch Cargo.toml after 3 attempts"
+                exit 1
+              fi
+            done
+            if [[ ! $TAG == v* ]]; then
+              TAG="v$TAG"
+            fi
             SHOULD_RELEASE=true
-            echo "📦 Manual release triggered for: $TAG"
+            echo "Version from Cargo.toml: $TAG"
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             TAG="${{ github.ref_name }}"
             SHOULD_RELEASE=true
@@ -51,103 +70,92 @@ jobs:
           echo "tag_name=$TAG" >> "$GITHUB_OUTPUT"
           echo "should_release=$SHOULD_RELEASE" >> "$GITHUB_OUTPUT"
 
-  build:
-    name: Build ${{ matrix.target }}
+  compile:
+    name: Build ${{ matrix.triple }}
     needs: prepare
-    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-apple-darwin
-            os: macos-13
-            rust_target: x86_64-apple-darwin
-            build_method: make
-          - target: aarch64-apple-darwin
-            os: macos-14
-            rust_target: aarch64-apple-darwin
-            build_method: make
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-22.04
-            arch_env: x86_64
-            rust_target: x86_64-unknown-linux-musl
-            build_method: zigbuild
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-22.04-arm
-            arch_env: aarch64
-            rust_target: aarch64-unknown-linux-musl
-            build_method: zigbuild
-
+          - triple: "x86_64-unknown-linux-musl"
+            runner: "ubuntu-latest"
+            platform: "x86_64"
+          - triple: "x86_64-apple-darwin"
+            runner: "ubuntu-latest"
+            platform: "x86_64"
+          - triple: "aarch64-unknown-linux-musl"
+            runner: "ubuntu-22.04-arm"
+            platform: "aarch64"
+          - triple: "aarch64-apple-darwin"
+            runner: "ubuntu-22.04-arm"
+            platform: "aarch64"
+          - triple: "riscv64gc-unknown-linux-musl"
+            runner: "ubuntu-22.04-arm"
+            platform: "riscv64"
+    runs-on: ${{ matrix.runner }}
     steps:
-      - name: 📥 Checkout start-os repository
-        uses: actions/checkout@v4
+      - name: Cleaning up unnecessary files
+        run: |
+          sudo apt-get remove --purge -y mono-* \
+            ghc* cabal-install* \
+            dotnet* \
+            php* \
+            ruby* \
+            mysql-* \
+            postgresql-* \
+            azure-cli \
+            powershell \
+            google-cloud-sdk \
+            msodbcsql* mssql-tools* \
+            imagemagick* \
+            libgl1-mesa-dri \
+            google-chrome-stable \
+            firefox || true
+          sudo apt-get autoremove -y || true
+          sudo apt-get clean || true
+
+      - uses: actions/checkout@v4
         with:
           repository: ${{ env.UPSTREAM_REPO }}
           ref: ${{ env.UPSTREAM_REF }}
-          fetch-depth: 0
           submodules: recursive
-          path: start-os
 
       - name: 🔍 Show upstream commit
         run: |
           echo "Building from commit:"
-          git -C start-os rev-parse HEAD
+          git rev-parse HEAD
           echo ""
           echo "Submodules:"
-          git -C start-os submodule status
+          git submodule status
 
       - name: 📝 Generate GIT_HASH.txt (required by build)
-        working-directory: start-os
         run: |
           git rev-parse HEAD > GIT_HASH.txt
           echo "GIT_HASH: $(cat GIT_HASH.txt)"
 
-      - name: 🦀 Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
         with:
-          targets: ${{ matrix.rust_target }}
+          node-version: ${{ env.NODEJS_VERSION }}
 
-      - name: 💾 Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Set up docker QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure sccache
+        uses: actions/github-script@v7
         with:
-          workspaces: start-os/core
-          shared-key: ${{ matrix.rust_target }}
-          cache-on-failure: true
+          script: |
+            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-      # macOS builds use standard cargo via Makefile
-      - name: 🍎 Build start-cli (macOS)
-        if: matrix.build_method == 'make'
-        working-directory: start-os
+      - name: Make
+        run: TARGET=${{ matrix.triple }} make cli
         env:
-          PLATFORM: ${{ startsWith(matrix.rust_target, 'aarch64') && 'aarch64' || 'x86_64' }}
-        run: |
-          echo "Building using Makefile (cargo install)..."
-          make cli
-
-      # Linux builds use zigbuild for proper musl linking
-      - name: 🔧 Install Zig toolchain (Linux musl)
-        if: matrix.build_method == 'zigbuild'
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.12.0
-
-      - name: 🔧 Install cargo-zigbuild (Linux musl)
-        if: matrix.build_method == 'zigbuild'
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-zigbuild
-
-      - name: 🐧 Build start-cli (Linux musl)
-        if: matrix.build_method == 'zigbuild'
-        working-directory: start-os
-        env:
-          ENVIRONMENT: docker-registry
-          ARCH: ${{ matrix.arch_env }}
-          TARGET: ${{ matrix.rust_target }}
-          ENFORCE_USE_DOCKER: "0"
-        run: |
-          echo "Building using cargo-zigbuild for static musl binary..."
-          ./core/build/build-cli.sh
+          PLATFORM: ${{ matrix.platform }}
+          SCCACHE_GHA_ENABLED: on
+          SCCACHE_GHA_VERSION: 0
 
       - name: 📦 Package and verify binary
         shell: bash
@@ -155,38 +163,28 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts
 
-          # Find the built binary
-          if [[ "${{ matrix.build_method }}" == "make" ]]; then
-            BIN="$HOME/.cargo/bin/start-cli"
-          else
-            BIN="start-os/core/target/${{ matrix.rust_target }}/release/start-cli"
-          fi
+          BIN="core/target/${{ matrix.triple }}/release/start-cli"
 
           if [[ ! -f "$BIN" ]]; then
             echo "❌ Binary not found at: $BIN"
             exit 1
           fi
 
-          # Verify musl binaries are actually static
-          if [[ "${{ matrix.rust_target }}" == *"musl"* ]]; then
+          if [[ "${{ matrix.triple }}" == *"musl"* ]]; then
             echo "🔍 Verifying musl binary is statically linked..."
             LDD_OUTPUT=$(ldd "$BIN" 2>&1 || true)
             echo "ldd output: $LDD_OUTPUT"
-            
             if [[ "$LDD_OUTPUT" == *"not a dynamic executable"* ]] || [[ "$LDD_OUTPUT" == *"statically linked"* ]]; then
               echo "✅ Binary is statically linked (musl)"
             else
               echo "⚠️ WARNING: Binary appears to be dynamically linked!"
               echo "$LDD_OUTPUT"
             fi
-            
-            # Alternative check using file command
             echo "File command output:"
             file "$BIN"
           fi
 
-          # Copy and strip binary
-          OUT="artifacts/start-cli-${{ matrix.target }}"
+          OUT="artifacts/start-cli-${{ matrix.triple }}"
           cp "$BIN" "$OUT"
           chmod +x "$OUT"
 
@@ -194,30 +192,25 @@ jobs:
           (strip "$OUT" || llvm-strip "$OUT" || true) 2>/dev/null || true
           echo "📏 Binary size after stripping: $(du -h "$OUT" | cut -f1)"
 
-          # Create archive
           pushd artifacts >/dev/null
-          tar -czf "start-cli-${{ matrix.target }}.tar.gz" "start-cli-${{ matrix.target }}"
-
-          # Generate checksum
+          tar -czf "start-cli-${{ matrix.triple }}.tar.gz" "start-cli-${{ matrix.triple }}"
           if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "start-cli-${{ matrix.target }}.tar.gz" > "start-cli-${{ matrix.target }}.tar.gz.sha256"
+            sha256sum "start-cli-${{ matrix.triple }}.tar.gz" > "start-cli-${{ matrix.triple }}.tar.gz.sha256"
           else
-            shasum -a 256 "start-cli-${{ matrix.target }}.tar.gz" > "start-cli-${{ matrix.target }}.tar.gz.sha256"
+            shasum -a 256 "start-cli-${{ matrix.triple }}.tar.gz" > "start-cli-${{ matrix.triple }}.tar.gz.sha256"
           fi
-
-          echo "📦 Archive created: start-cli-${{ matrix.target }}.tar.gz"
+          echo "📦 Archive created: start-cli-${{ matrix.triple }}.tar.gz"
           popd >/dev/null
 
-      - name: 📤 Upload build artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: cli-binaries-${{ matrix.target }}
+          name: cli-binaries-${{ matrix.triple }}
           path: artifacts/
 
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [prepare, build]
+    needs: [prepare, compile]
     if: needs.prepare.outputs.should_release == 'true'
     steps:
       - name: 📥 Download all artifacts
@@ -233,10 +226,7 @@ jobs:
           echo "📦 Downloaded binaries:"
           ls -lh *.tar.gz
           echo ""
-
-          # Combine all checksums
           cat *.sha256 > sha256sums.txt
-
           echo "✅ SHA256 checksums:"
           cat sha256sums.txt
 
@@ -244,36 +234,50 @@ jobs:
         working-directory: release-binaries
         env:
           TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+          UPSTREAM_REPO: ${{ env.UPSTREAM_REPO }}
+          UPSTREAM_REF: ${{ env.UPSTREAM_REF }}
         run: |
-          {
-            echo "## Start CLI $TAG_NAME"
-            echo ""
-            echo "### 📦 Installation"
-            echo ""
-            echo "Download the appropriate binary for your platform and extract:"
-            echo '```sh'
-            echo 'tar -xzf start-cli-<platform>.tar.gz'
-            echo 'chmod +x start-cli-<platform>'
-            echo 'sudo mv start-cli-<platform> /usr/local/bin/start-cli'
-            echo '```'
-            echo ""
-            echo "### 🔍 Verify Download"
-            echo ""
-            echo "Compare the checksum with the values below:"
-            echo '```sh'
-            echo 'shasum -a 256 start-cli-<platform>.tar.gz'
-            echo '```'
-            echo ""
-            echo "### ✅ SHA256 Checksums"
-            echo '```'
-            cat sha256sums.txt
-            echo '```'
-            echo ""
-            echo "### 📋 Build Information"
-            echo "- Built from: \`${{ env.UPSTREAM_REPO }}\` @ \`${{ env.UPSTREAM_REF }}\`"
-            echo "- Linux binaries: Static musl builds (no glibc dependency)"
-            echo "- macOS binaries: Native builds for Intel and Apple Silicon"
-          } > release-notes.txt
+          # Header + instructions
+          cat > release-notes.txt << 'EOF'
+          ## Start CLI VERSION_PLACEHOLDER
+
+          ### 📦 Installation
+
+          Download the appropriate binary for your platform and extract:
+          ```
+          tar -xzf start-cli-<platform>.tar.gz
+          chmod +x start-cli-<platform>
+          sudo mv start-cli-<platform> /usr/local/bin/start-cli
+          ```
+
+          ### 🔍 Verify Download
+
+          Compare the checksum with the values below:
+          ```
+          shasum -a 256 start-cli-<platform>.tar.gz
+          ```
+
+          ### ✅ SHA256 Checksums
+          ```
+          EOF
+
+          # Inject checksums
+          cat sha256sums.txt >> release-notes.txt
+
+          # Close checksum code fence and add build info
+          cat >> release-notes.txt << 'EOF'
+          ```
+
+          ### 📋 Build Information
+          - Built from: `UPSTREAM_REPO_PLACEHOLDER` @ `UPSTREAM_REF_PLACEHOLDER`
+          - Linux binaries: Static musl builds (no glibc dependency)
+          - macOS binaries: Native builds for Intel and Apple Silicon
+          EOF
+
+          # Replace placeholders with real values
+          sed -i "s/VERSION_PLACEHOLDER/$TAG_NAME/g" release-notes.txt
+          sed -i "s|UPSTREAM_REPO_PLACEHOLDER|$UPSTREAM_REPO|g" release-notes.txt
+          sed -i "s|UPSTREAM_REF_PLACEHOLDER|$UPSTREAM_REF|g" release-notes.txt
 
       - name: 🚀 Create GitHub Release
         uses: softprops/action-gh-release@v2
