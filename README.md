@@ -1,7 +1,8 @@
-<div align="center">
-  <img src="https://raw.githubusercontent.com/Start9Labs/start-os/refs/heads/master/web/projects/shared/assets/img/icon.png" alt="Project Logo" width="11%" />
-  <h1 style="margin-top: 0;">Start CLI</h1>
-</div>
+<p align="center">
+  <img src="icon.png" alt="StartTunnel" width="120">
+</p>
+
+<h1 align="center">Start CLI</h1>
 
 **Start CLI (`start-cli`)** is the official command-line tool for **StartOS** - a sovereignty-first operating system empowering anyone to run and host their own services independently.
 
