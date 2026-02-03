@@ -12,7 +12,7 @@ The CLI is **essential** for:
 - remotely managing a StartOS node (listing services, installing, updating, backups, monitoring),
 - integrating StartOS with CI/CD pipelines and developer tooling.
 
-This repository provides **prebuilt `start-cli` binaries** for:
+Prebuilt binaries are available for:
 
 - macOS (Intel x86_64 & Apple Silicon ARM64),
 - Linux (Intel x86_64 & ARM64).
@@ -21,7 +21,7 @@ Official StartOS source code is here: [start9labs/start-os](https://github.com/s
 
 ---
 
-## 🔧 Installation
+## Installation
 
 ### Automated Installation (Recommended)
 
@@ -33,23 +33,23 @@ curl -fsSL https://start9labs.github.io/start-cli/install.sh | sh
 
 The installer will:
 
-- → Detect your platform automatically (macOS/Linux, Intel/ARM64)
-- → Download the correct binary from GitHub releases
-- → Install to `~/.local/bin/start-cli`
-- → Update your shell configuration for PATH
-- → Verify the installation
+- Detect your platform automatically (macOS/Linux, Intel/ARM64)
+- Download the correct binary from GitHub releases
+- Install to `~/.local/bin/start-cli`
+- Update your shell configuration for PATH
+- Verify the installation
 
 ### Manual Installation
 
-If you prefer manual installation, download the appropriate binary from the [Releases](https://github.com/Start9Labs/start-cli/releases) page, then extract the archive, set executable permissions, and copy it to a directory in your PATH.
+If you prefer manual installation, download the appropriate binary from the [start-os releases](https://github.com/Start9Labs/start-os/releases) page, then set executable permissions and copy it to a directory in your PATH.
 
 ---
 
-## 🔄 Release Workflow
+## Source Code
 
-Binaries are built and published automatically using **GitHub Actions** workflow:
+This repo hosts the installer script via GitHub Pages. The start-cli source code and release binaries live in the [StartOS monorepo](https://github.com/Start9Labs/start-os).
 
-- Triggered on each new **tag** pushed (`vX.Y.Z`),
-- Builds for all supported platforms,
-- Generates SHA256 checksums for integrity verification,
-- Publishes a GitHub Release with `.tar.gz` archives ready for download.
+## Learn More
+
+- [StartOS Documentation](https://docs.start9.com)
+- [Start9 Website](https://start9.com)
