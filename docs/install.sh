@@ -36,14 +36,14 @@ printf "\n"
 OS=$(uname -s)
 ARCH=$(uname -m)
 
-# Map to start-cli's naming convention
+# Map to start-os release asset naming convention
 case "$OS" in
-    Darwin) 
-        OS_NAME="apple-darwin"
+    Darwin)
+        OS_NAME="macos"
         DISPLAY_OS="macOS"
         ;;
-    Linux) 
-        OS_NAME="unknown-linux-musl"
+    Linux)
+        OS_NAME="linux"
         DISPLAY_OS="Linux"
         ;;
     *)
@@ -59,7 +59,7 @@ case "$ARCH" in
         DISPLAY_ARCH="Intel/AMD64"
         ;;
     arm64|aarch64)
-        ARCH_NAME="aarch64" 
+        ARCH_NAME="aarch64"
         DISPLAY_ARCH="ARM64"
         ;;
     *)
@@ -71,7 +71,7 @@ esac
 
 # Fetch latest version from GitHub (including pre-releases)
 printf "%s•%s Fetching latest release...\n" "$YELLOW" "$RESET"
-VERSION=$(curl -fsSL https://api.github.com/repos/Start9Labs/start-cli/releases | grep -m1 '"tag_name":' | sed 's/.*: "//;s/",//')
+VERSION=$(curl -fsSL "https://api.github.com/repos/Start9Labs/start-os/releases?per_page=1" | grep -m1 '"tag_name":' | sed 's/.*: "//;s/",//')
 
 if [ -z "$VERSION" ]; then
     printf "%sError:%s Could not determine latest version\n" "$RED$BOLD" "$RESET"
@@ -81,9 +81,8 @@ fi
 printf "%s✓%s Latest version: %s\n" "$GREEN" "$RESET" "$VERSION"
 
 # Download info
-FILENAME="start-cli-${ARCH_NAME}-${OS_NAME}.tar.gz"
-BINARY_NAME="start-cli-${ARCH_NAME}-${OS_NAME}"
-DOWNLOAD_URL="https://github.com/Start9Labs/start-cli/releases/download/${VERSION}/${FILENAME}"
+ASSET_NAME="start-cli_${ARCH_NAME}-${OS_NAME}"
+DOWNLOAD_URL="https://github.com/Start9Labs/start-os/releases/download/${VERSION}/${ASSET_NAME}"
 
 # System information (dynamically aligned)
 BOX_WIDTH=63  # Total width inside the borders
@@ -108,49 +107,26 @@ printf "%s•%s Creating directories...\n" "$YELLOW" "$RESET"
 mkdir -p "$HOME/.local/bin"
 
 # Use /tmp to avoid directory issues when piped from curl
-TEMP_DIR="/tmp/start-cli-install-$$"
-trap "rm -rf '$TEMP_DIR'" EXIT
+TEMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TEMP_DIR"' EXIT
 mkdir -p "$TEMP_DIR"
 
 # Download
 printf "%s•%s Downloading from GitHub releases...\n" "$YELLOW" "$RESET"
-if ! curl -fsSL "$DOWNLOAD_URL" -o "$TEMP_DIR/$FILENAME" 2>/dev/null; then
+if ! curl -fsSL "$DOWNLOAD_URL" -o "$TEMP_DIR/start-cli" 2>/dev/null; then
     printf "%sError:%s Failed to download from GitHub\n" "$RED$BOLD" "$RESET"
     printf "       %s\n" "$DOWNLOAD_URL"
     exit 1
 fi
+chmod +x "$TEMP_DIR/start-cli"
 printf "%s✓%s Download completed\n" "$GREEN" "$RESET"
 
-# Extract
-printf "%s•%s Extracting archive...\n" "$YELLOW" "$RESET"
-if ! tar -xzf "$TEMP_DIR/$FILENAME" -C "$TEMP_DIR" 2>/dev/null; then
-    printf "%sError:%s Failed to extract archive\n" "$RED$BOLD" "$RESET"
-    exit 1
-fi
-printf "%s✓%s Archive extracted\n" "$GREEN" "$RESET"
-sleep 1
-# Locate binary
-printf "%s•%s Locating binary...\n" "$YELLOW" "$RESET"
-BINARY_PATH="$TEMP_DIR/$BINARY_NAME"
-
-if [ -f "$BINARY_PATH" ]; then
-    printf "%s✓%s Binary located\n" "$GREEN" "$RESET"
-elif [ -f "$TEMP_DIR/start-cli" ]; then
-    printf "%s✓%s Binary located\n" "$GREEN" "$RESET"
-    BINARY_PATH="$TEMP_DIR/start-cli"
-else
-    printf "%sError:%s Could not locate binary in archive\n" "$RED$BOLD" "$RESET"
-    exit 1
-fi
-
-# Test binary (rename first to fix the bug)
 TEST_BINARY="$TEMP_DIR/start-cli"
-cp "$BINARY_PATH" "$TEST_BINARY"
-chmod +x "$TEST_BINARY"
 
+INSTALLED_VERSION="unknown"
 printf "%s•%s Testing binary...\n" "$YELLOW" "$RESET"
 if "$TEST_BINARY" --version >/dev/null 2>&1; then
-    VERSION_OUTPUT=$("$TEST_BINARY" --version 2>/dev/null | head -n1)
+    INSTALLED_VERSION=$("$TEST_BINARY" --version 2>/dev/null | head -n1)
     printf "%s✓%s Binary test passed\n" "$GREEN" "$RESET"
 else
     printf "%sWarning:%s Binary test failed, continuing...\n" "$YELLOW$BOLD" "$RESET"
@@ -180,12 +156,6 @@ else
     printf "%s✓%s No shell config updates needed\n" "$GREEN" "$RESET"
 fi
 
-# Get installed version
-INSTALLED_VERSION="unknown"
-if [ -x "$HOME/.local/bin/start-cli" ]; then
-    INSTALLED_VERSION=$("$HOME/.local/bin/start-cli" --version 2>/dev/null | head -n1 || echo "unknown")
-fi
-
 # Success message (centered alignment)
 printf "\n"
 printf "%s┌───────────────────────────────────────────────────────────────┐%s\n" "$DIM$GREEN" "$RESET"
@@ -209,11 +179,11 @@ if command -v start-cli >/dev/null 2>&1; then
     printf "%sCommon Commands:%s\n" "$BOLD" "$RESET"
     printf "%s────────────────────────────────────────────────────────────────%s\n" "$DIM" "$RESET"
     printf "  %sstart-cli init%s              Initialize developer key\n" "$GREEN" "$RESET"
-    printf "  %sstart-cli auth login%s        Authanticate login to your StartOS\n" "$GREEN" "$RESET"
+    printf "  %sstart-cli auth login%s        Authenticate login to your StartOS\n" "$GREEN" "$RESET"
     printf "  %sstart-cli package list%s      List services\n" "$GREEN" "$RESET"
     printf "  %sstart-cli --help%s            Show all commands\n" "$GREEN" "$RESET"
     printf "\n"
-    printf "%sDocumentation:%s https://staging.docs.start9.com\n" "$BLUE" "$RESET"
+    printf "%sDocumentation:%s https://docs.start9.com\n" "$BLUE" "$RESET"
 else
     printf "%sNote:%s For new terminal sessions, %sstart-cli%s will be available automatically\n" "$BLUE$BOLD" "$RESET" "$WHITE$BOLD" "$RESET"
     printf "      For this session: export PATH=\"\$HOME/.local/bin:\$PATH\"\n"
