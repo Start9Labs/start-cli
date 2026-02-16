@@ -1,55 +1,34 @@
 <p align="center">
-  <img src="icon.png" alt="StartTunnel" width="120">
+  <img src="icon.png" alt="Start CLI" width="120">
 </p>
 
 <h1 align="center">Start CLI</h1>
 
-**Start CLI (`start-cli`)** is the official command-line tool for **StartOS** - a sovereignty-first operating system empowering anyone to run and host their own services independently.
+<p align="center">
+  The official command-line tool for building, packaging, and managing StartOS services.
+</p>
 
-The CLI is **essential** for:
+## About
 
-- building and packaging services into the **`.s9pk`** (StartOS Service Package) format,
-- remotely managing a StartOS node (listing services, installing, updating, backups, monitoring),
-- integrating StartOS with CI/CD pipelines and developer tooling.
+This repo hosts the Start CLI installer script via GitHub Pages. The source code and release binaries live in the [StartOS monorepo](https://github.com/Start9Labs/start-os).
 
-Prebuilt binaries are available for:
+For full documentation — CLI reference, service packaging guide, and remote management — see the [Start CLI docs](https://docs.start9.com).
 
-- macOS (Intel x86_64 & Apple Silicon ARM64),
-- Linux (Intel x86_64 & ARM64).
+## Install
 
-Official StartOS source code is here: [start9labs/start-os](https://github.com/start9labs/start-os).
-
----
-
-## Installation
-
-### Automated Installation (Recommended)
-
-The easiest way to install start-cli is using our automated installer script:
-
-```
+```bash
 curl -fsSL https://start9labs.github.io/start-cli/install.sh | sh
 ```
 
-The installer will:
+The installer detects your platform (macOS/Linux, x86_64/ARM64), downloads the correct binary, and adds it to your PATH.
 
-- Detect your platform automatically (macOS/Linux, Intel/ARM64)
-- Download the correct binary from GitHub releases
-- Install to `~/.local/bin/start-cli`
-- Update your shell configuration for PATH
-- Verify the installation
+## Update
 
-### Manual Installation
+Re-run the install command. The installer detects the existing installation and replaces it.
 
-If you prefer manual installation, download the appropriate binary from the [start-os releases](https://github.com/Start9Labs/start-os/releases) page, then set executable permissions and copy it to a directory in your PATH.
+## Links
 
----
-
-## Source Code
-
-This repo hosts the installer script via GitHub Pages. The start-cli source code and release binaries live in the [StartOS monorepo](https://github.com/Start9Labs/start-os).
-
-## Learn More
-
-- [StartOS Documentation](https://docs.start9.com)
+- [Start CLI Documentation](https://docs.start9.com/start-cli)
+- [Source Code](https://github.com/Start9Labs/start-os)
+- [Report an Issue](https://github.com/Start9Labs/start-os/issues)
 - [Start9 Website](https://start9.com)
