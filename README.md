@@ -12,7 +12,7 @@
 
 This repo hosts the Start CLI installer script via GitHub Pages. The source code and release binaries live in the [StartOS monorepo](https://github.com/Start9Labs/start-os).
 
-For full documentation — CLI reference, service packaging guide, and remote management — see the [Start CLI docs](https://docs.start9.com).
+For full documentation — CLI reference, service packaging guide, and remote management — see the [Start CLI docs](https://docs.start9.com/start-os/cli).
 
 ## Install
 
@@ -28,7 +28,7 @@ Re-run the install command. The installer detects the existing installation and 
 
 ## Links
 
-- [Start CLI Documentation](https://docs.start9.com/start-cli)
+- [Start CLI Documentation](https://docs.start9.com/start-os/cli)
 - [Source Code](https://github.com/Start9Labs/start-os)
 - [Report an Issue](https://github.com/Start9Labs/start-os/issues)
 - [Start9 Website](https://start9.com)
